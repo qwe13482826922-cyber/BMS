@@ -186,7 +186,14 @@ static void prv_init_adc(void)
     adc.ADC_Mode = ADC_Mode_Independent;
     adc.ADC_ScanConvMode = ENABLE;
     adc.ADC_ContinuousConvMode = DISABLE;
-    adc.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T2_TRGO;
+    adc.ADC_ExternalTrigConv =
+#if defined(ADC_ExternalTrigConv_T2_TRGO)
+        ADC_ExternalTrigConv_T2_TRGO;
+#elif defined(ADC_ExternalTrigConv_T2_CC2)
+        ADC_ExternalTrigConv_T2_CC2;
+#else
+        ADC_ExternalTrigConv_None;
+#endif
     adc.ADC_DataAlign = ADC_DataAlign_Right;
     adc.ADC_NbrOfChannel = BATTERY_ADC_CHANNEL_COUNT;
     ADC_Init(ADC1, &adc);
@@ -223,12 +230,28 @@ static void prv_init_timer(void)
     tim.TIM_ClockDivision = TIM_CKD_DIV1;
     TIM_TimeBaseInit(TIM2, &tim);
 
+#if defined(ADC_ExternalTrigConv_T2_TRGO)
     TIM_SelectOutputTrigger(TIM2, TIM_TRGOSource_Update);
+#elif defined(ADC_ExternalTrigConv_T2_CC2)
+    TIM_OCInitTypeDef oc;
+    TIM_OCStructInit(&oc);
+    oc.TIM_OCMode = TIM_OCMode_Timing;
+    oc.TIM_OutputState = TIM_OutputState_Enable;
+    oc.TIM_Pulse = 1;
+    TIM_OC2Init(TIM2, &oc);
+    TIM_OC2PreloadConfig(TIM2, TIM_OCPreload_Disable);
+    TIM_SelectOutputTrigger(TIM2, TIM_TRGOSource_CC2);
+#else
+    TIM_SelectOutputTrigger(TIM2, TIM_TRGOSource_Update);
+#endif
 }
 
 static void prv_start_conversion(void)
 {
     TIM_Cmd(TIM2, ENABLE);
+#if !defined(ADC_ExternalTrigConv_T2_TRGO) && !defined(ADC_ExternalTrigConv_T2_CC2)
+    ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+#endif
 }
 
 static void prv_process_dma_block(uint16_t start_index, uint16_t count)
